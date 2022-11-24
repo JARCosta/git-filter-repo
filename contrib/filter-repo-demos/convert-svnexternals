@@ -186,21 +186,20 @@ def create_blob(parsed_config):
   """
   lines = []
   for sec in parsed_config.sections():
-    lines.append("[" + sec + "]\n")
-    for opt in parsed_config.options(sec):
-      lines.append("\t" + opt + " = " + parsed_config[sec][opt] + "\n")
-
+    lines.append(f"[{sec}" + "]\n")
+    lines.extend("\t" + opt + " = " + parsed_config[sec][opt] + "\n"
+                 for opt in parsed_config.options(sec))
   return fr.Blob(''.join(lines).encode())
 
 def get_git_url(svn_url):
   """
   Get the Git URL for a corresponding SVN URL.
   """
-  for entry in svn_git_mappings:
-    if entry['svn_url'] == svn_url:
-      return entry['git_url']
-  else:
-    return None
+  return next(
+      (entry['git_url']
+       for entry in svn_git_mappings if entry['svn_url'] == svn_url),
+      None,
+  )
 
 def get_git_commit_hash(svn_url, svn_rev):
   """
@@ -248,9 +247,9 @@ def get_absolute_svn_url(svnext_url, svn_root_url):
   elif svnext_url.startswith("^/"):
     svnext_url = svn_root_url + svnext_url[1:]
   elif svnext_url.startswith("//"):
-    svnext_url = svn_root_parsed.scheme + ":" + svnext_url
+    svnext_url = f"{svn_root_parsed.scheme}:{svnext_url}"
   elif svnext_url.startswith("/"):
-    svnext_url = svn_root_parsed.scheme + "://" + svn_root_parsed.netloc + svnext_url
+    svnext_url = f"{svn_root_parsed.scheme}://{svn_root_parsed.netloc}{svnext_url}"
 
   return True, svnext_url
 
@@ -375,7 +374,7 @@ def write_analysis(reportdir):
   analysis['file_ext_orig'].sort()
   analysis['file_ext_abs'].sort()
 
-  sys.stdout.write("Writing reports to %s..." % fr.decode(reportdir))
+  sys.stdout.write(f"Writing reports to {fr.decode(reportdir)}...")
   sys.stdout.flush()
 
   with open(os.path.join(reportdir, b"dir-externals-original.txt"), 'wb') as f:
@@ -507,13 +506,13 @@ def delete_submodules(commit, metadata):
           # -> Delete it if there is no corresponding entry in
           #    .gitsvnextmodules, keep/reinsert it otherwise
           for sec in gitsvnextmodules.sections():
-            if gitsvnextmodules[sec]['path'].encode() == dirname:
-              # Reinsert it, might have been deleted in previous commits
-              if add_submodule_tree_entry(commit, gitsvnextmodules, sec):
-                # And remove the config section because this external has been
-                # converted
-                gitsvnextmodules.remove_section(sec)
-                break
+            if gitsvnextmodules[sec]['path'].encode(
+            ) == dirname and add_submodule_tree_entry(commit, gitsvnextmodules,
+                                                      sec):
+              # And remove the config section because this external has been
+              # converted
+              gitsvnextmodules.remove_section(sec)
+              break
           else:
             # Delete it
             commit.file_changes.append(fr.FileChange(b'D', dirname))
@@ -525,11 +524,10 @@ def delete_submodules(commit, metadata):
         blob = create_blob(gitsvnextmodules)
         filter.insert(blob)
         change.blob_id = blob.id
-      else:
-        if change.type == b'M':
-          # File became empty, delete it
-          commit.file_changes.append(fr.FileChange(b'D', b'.gitsvnextmodules'))
-          break # avoid endless for loop
+      elif change.type == b'M':
+        # File became empty, delete it
+        commit.file_changes.append(fr.FileChange(b'D', b'.gitsvnextmodules'))
+        break # avoid endless for loop
         #else:
           # File was empty already, delete command already present in stream
 
@@ -539,10 +537,7 @@ my_args = parse_args()
 if my_args.svn_root_url:
   svn_root_url = my_args.svn_root_url.rstrip("/")
 
-# Arguments forwarded to filter-repo
-extra_args = []
-if my_args.force:
-  extra_args = ['--force']
+extra_args = ['--force'] if my_args.force else []
 if my_args.refs:
   extra_args += ['--refs'] + my_args.refs
 

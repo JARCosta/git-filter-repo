@@ -144,7 +144,7 @@ def lint_with_real_filenames(commit, metadata):
       change.blob_id = blob.id
 
 def lint_non_binary_blobs(blob, metadata):
-  if not b"\0" in blob.data[0:8192]:
+  if b"\0" not in blob.data[:8192]:
     filename = '.git/info/tmpfile'
     with open(filename, "wb") as f:
       f.write(blob.data)
@@ -160,9 +160,7 @@ if lint_args.relevant:
   exec('def is_relevant(filename):\n  '+'\n  '.join(body.splitlines()),
        globals())
   lint_args.filenames_important = True
-input_args = []
-if lint_args.refs:
-  input_args = ["--args",] + lint_args.refs
+input_args = ["--args",] + lint_args.refs if lint_args.refs else []
 args = fr.FilteringOptions.parse_args(input_args, error_on_empty = False)
 args.force = True
 if lint_args.filenames_important:

@@ -114,8 +114,7 @@ def java_to_fnmatch_glob(extended_glob):
   if not m:
     return [extended_glob]
 
-  all_answers = [java_to_fnmatch_glob(m.group(1)+x+m.group(3))
-                 for x in m.group(2).split(b',')]
+  all_answers = [java_to_fnmatch_glob(m[1] + x + m[3]) for x in m[2].split(b',')]
   return [item for sublist in all_answers for item in sublist]
 
 class BFG_ish:
@@ -177,15 +176,16 @@ class BFG_ish:
 
     # Sanity check on args.repo
     if not os.path.isdir(args.repo):
-      raise SystemExit("Repo not found: {}".format(os.fsdecode(args.repo)))
+      raise SystemExit(f"Repo not found: {os.fsdecode(args.repo)}")
     dirname, basename = os.path.split(args.repo)
     if not basename:
       dirname, basename = os.path.split(dirname)
     if not dirname:
       dirname = b'.'
     if basename == b".git":
-      raise SystemExit("For non-bare repos, please specify the toplevel directory ({}) for repo"
-                       .format(os.fsdecode(dirname)))
+      raise SystemExit(
+          f"For non-bare repos, please specify the toplevel directory ({os.fsdecode(dirname)}) for repo"
+      )
 
     return args
 
@@ -209,16 +209,14 @@ class BFG_ish:
     if not self.args.delete_files and not self.args.delete_folders:
       return filename
     paths = filename.split(b'/')
-    dirs = paths[0:-1]
+    dirs = paths[:-1]
     basename = paths[-1]
     if self.args.delete_files and any(fnmatch.fnmatch(basename, x)
                                  for x in self.args.delete_files):
       return False
-    if self.args.delete_folders and any(any(fnmatch.fnmatch(dirname, x)
-                                            for dirname in dirs)
-                                        for x in self.args.delete_folders):
-      return False
-    return True
+    return not self.args.delete_folders or not any(
+        any(fnmatch.fnmatch(dirname, x) for dirname in dirs)
+        for x in self.args.delete_folders)
 
   def should_filter_path(self, filename):
     def matches(basename, glob_list):
@@ -226,14 +224,11 @@ class BFG_ish:
 
     basename = os.path.basename(filename)
     if self.args.filter_content_including and \
-       not matches(basename, self.args.filter_content_including):
+         not matches(basename, self.args.filter_content_including):
         return False
 
-    if self.args.filter_content_excluding and \
-       matches(basename, self.args.filter_content_excluding):
-      return False
-
-    return True
+    return not self.args.filter_content_excluding or not matches(
+        basename, self.args.filter_content_excluding)
 
   def filter_relevant_blobs(self, commit):
     for change in commit.file_changes:
@@ -261,7 +256,7 @@ class BFG_ish:
       # FIXME: This next line assumes the file fits in memory; though the way
       # fr.Blob works we kind of have that assumption baked in elsewhere too...
       contents = self.cat_file_proc.stdout.read(int(objsize))
-      if not any(x == b"0" for x in contents[0:8192]): # not binaries
+      if all(x != b"0" for x in contents[:8192]): # not binaries
         for literal, replacement in self.replacement_rules['literals']:
           contents = contents.replace(literal, replacement)
         for regex,   replacement in self.replacement_rules['regexes']:
@@ -370,8 +365,7 @@ class BFG_ish:
       p.stdin.write(commit_msg)
       p.stdin.close()
       if p.wait() != 0:
-        raise SystemExit("Error: failed to write preserve commit for {} [{}]"
-                         .format(ref, tree))
+        raise SystemExit(f"Error: failed to write preserve commit for {ref} [{tree}]")
       updates[ref] = p.stdout.read().strip()
     p = subproc.Popen('git update-ref --stdin'.split(), stdin = subprocess.PIPE)
     for ref, newvalue in updates.items():

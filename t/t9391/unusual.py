@@ -22,7 +22,7 @@ import git_filter_repo as fr
 
 total_objects = {'common': 0, 'uncommon': 0}
 def track_everything(obj, *_ignored):
-  if type(obj) == fr.Blob or type(obj) == fr.Commit:
+  if type(obj) in [fr.Blob, fr.Commit]:
     total_objects['common'] += 1
   else:
     total_objects['uncommon'] += 1
@@ -68,8 +68,9 @@ parser.run(input = sys.stdin.detach(),
 # only testing here for code coverage; the capacity exists to help debug
 # git-filter-repo itself, not for external folks to use.
 assert str(fr._IDS).startswith("Current count: 5")
-print("Found {} blobs/commits and {} other objects"
-      .format(total_objects['common'], total_objects['uncommon']))
+print(
+    f"Found {total_objects['common']} blobs/commits and {total_objects['uncommon']} other objects"
+)
 
 
 stream = io.BytesIO(textwrap.dedent('''
@@ -110,7 +111,7 @@ stream = io.BytesIO(textwrap.dedent('''
 
 counts = collections.Counter()
 def look_for_reset(obj, metadata):
-  print("Processing {}".format(obj))
+  print(f"Processing {obj}")
   counts[type(obj)] += 1
   if type(obj) == fr.Reset:
     assert obj.ref == b'refs/heads/B'
