@@ -264,22 +264,22 @@ class UserInterfaceNightmare:
     for line in output.splitlines():
       objhash, refname = line.split()
       if refname.endswith(b'^{}'):
-        refname = refname[0:-3]
+        refname = refname[:-3]
       cur_refs[refname] = objhash
     return cur_refs
 
   def _get_and_check_orig_refs(self):
     self._orig_refs = self._get_dereferenced_refs()
     if any(ref.startswith(self.args.original) for ref in self._orig_refs):
-      if self.args.force:
-        cmds = b''.join([b"delete %s\n" % r
-                         for r in sorted(self._orig_refs)
-                         if r.startswith(self.args.original)])
-        subproc.check_output('git update-ref --no-deref --stdin'.split(),
-                             input = cmds)
-      else:
-        raise SystemExit("Error: {} already exists.  Force overwriting with -f"
-                         .format(fr.decode(self.args.original)))
+      if not self.args.force:
+        raise SystemExit(
+            f"Error: {fr.decode(self.args.original)} already exists.  Force overwriting with -f"
+        )
+      cmds = b''.join([b"delete %s\n" % r
+                       for r in sorted(self._orig_refs)
+                       if r.startswith(self.args.original)])
+      subproc.check_output('git update-ref --no-deref --stdin'.split(),
+                           input = cmds)
 
   def _write_original_refs(self):
     new_refs = self._get_dereferenced_refs()
@@ -298,8 +298,8 @@ class UserInterfaceNightmare:
     if self.args.force and os.path.exists(self.args.d):
       shutil.rmtree(self.args.d)
     if os.path.exists(self.args.d):
-      raise SystemExit("Error: {} already exists; use --force to bypass."
-                       .format(self.args.d))
+      raise SystemExit(
+          f"Error: {self.args.d} already exists; use --force to bypass.")
 
     self._get_and_check_orig_refs()
 
@@ -352,7 +352,7 @@ class UserInterfaceNightmare:
     for line in output.splitlines():
       objhash, refname = line.split()
       if refname.endswith(b'^{}'):
-        refname = refname[0:-3]
+        refname = refname[:-3]
       refname = fr.decode(refname)
       if refname in self.args.refs:
         # Don't specify the same tag multiple times, or fast export will
@@ -417,8 +417,9 @@ class UserInterfaceNightmare:
         # [BUG-COMPAT??] Despite filter-branch setting GIT_ALLOW_NULL_SHA1
         # before calling read-tree, it expects errors to be thrown if any null
         # shas remain.  Crazy filter-branch.
-        raise SystemExit("Error: file {} has broken id {}"
-                         .format(fr.decode(filename), fr.decode(objid)))
+        raise SystemExit(
+            f"Error: file {fr.decode(filename)} has broken id {fr.decode(objid)}"
+        )
       else:
         new_changes[filename] = fr.FileChange(b'M', filename, objid, mode)
     commit.file_changes = list(new_changes.values())
@@ -455,11 +456,11 @@ class UserInterfaceNightmare:
       last = output.splitlines()[-6:]
       commit.author_name     = last[0]
       commit.author_email    = last[1]
-      assert(last[2][0:1] == b'@')
+      assert last[2][:1] == b'@'
       commit.author_date     = last[2][1:]
       commit.committer_name  = last[3]
       commit.committer_email = last[4]
-      assert(last[5][0:1] == b'@')
+      assert last[5][:1] == b'@'
       commit.committer_date  = last[5][1:]
 
     if not (self.args.tree_filter or self.args.index_filter or
@@ -502,7 +503,7 @@ class UserInterfaceNightmare:
       if full_tree:
         commit.file_changes.insert(0, fr.FileChange(b'DELETEALL'))
       elif deletion_changes and self.args.tree_filter:
-        orig_deletions = set(x.filename for x in deletion_changes)
+        orig_deletions = {x.filename for x in deletion_changes}
         # Populate tmp_tree with all the deleted files, each containing its
         # original name
         shutil.rmtree(self.tmp_tree)
@@ -603,7 +604,7 @@ class UserInterfaceNightmare:
 
 overrides = ('GIT_TEST_DISALLOW_ABBREVIATED_OPTIONS',
              'I_PROMISE_TO_UPGRADE_TO_FILTER_REPO')
-if not any(x in os.environ for x in overrides) and sys.argv[1:] != ['--help']:
+if all(x not in os.environ for x in overrides) and sys.argv[1:] != ['--help']:
   print("""
 WARNING: While filter-lamely is a better filter-branch than filter-branch,
          it is vastly inferior to filter-repo.  Please use filter-repo

@@ -51,7 +51,7 @@ class CheckIgnores:
         result = self.check_ignore_process.stdout.readline().rstrip(b'\n')
         (rest, pathname) = result.split(b"\t")
         if name != pathname:
-          raise SystemExit("Error: Passed {} but got {}".format(name, pathname))
+          raise SystemExit(f"Error: Passed {name} but got {pathname}")
         if rest == b'::':
           self.okay.add(name)
         else:

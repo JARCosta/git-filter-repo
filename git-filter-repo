@@ -144,7 +144,7 @@ def glob_to_regex(glob_bytestr):
   # what we want rather than employing this hackery, but since it
   # doesn't...
   if regex.endswith(r'\Z(?ms)'): # pragma: no cover
-    regex = regex[0:-7]
+    regex = regex[:-7]
   elif regex.startswith(r'(?s:') and regex.endswith(r')\Z'): # pragma: no cover
     regex = regex[4:-3]
 
@@ -288,7 +288,7 @@ class MailmapInfo(object):
       count = 0
       for line in f:
         count += 1
-        err = "Unparseable mailmap file: line #{} is bad: {}".format(count, line)
+        err = f"Unparseable mailmap file: line #{count} is bad: {line}"
         # Remove comments
         line = comment_re.sub(b'', line)
         # Remove leading and trailing whitespace
@@ -304,8 +304,7 @@ class MailmapInfo(object):
           self.changes[(None, proper_email)] = (proper_name, proper_email)
           continue
         rest = line[m.end():]
-        m = name_and_email_re.match(rest)
-        if m:
+        if m := name_and_email_re.match(rest):
           commit_name, commit_email = m.groups()
           if len(rest) != m.end():
             raise SystemExit(err)
@@ -335,7 +334,7 @@ class ProgressWriter(object):
     now = time.time()
     if now - self._last_progress_update > .1:
       self._last_progress_update = now
-      sys.stdout.write("\r{}".format(msg))
+      sys.stdout.write(f"\r{msg}")
       sys.stdout.flush()
 
   def finish(self):
@@ -398,11 +397,9 @@ class _IDs(object):
 
       # Transitivity will be needed if new commits are being inserted mid-way
       # through a branch.
-      if handle_transitivity:
-        # Anything that points to old_id should point to new_id
-        if old_id in self._reverse_translation:
-          for id_ in self._reverse_translation[old_id]:
-            self._translation[id_] = new_id
+      if handle_transitivity and old_id in self._reverse_translation:
+        for id_ in self._reverse_translation[old_id]:
+          self._translation[id_] = new_id
 
       # Record that new_id is pointed to by old_id
       if new_id not in self._reverse_translation:
@@ -413,10 +410,7 @@ class _IDs(object):
     """
     If old_id has been mapped to an alternate id, return the alternate id.
     """
-    if old_id in self._translation:
-      return self._translation[old_id]
-    else:
-      return old_id
+    return self._translation[old_id] if old_id in self._translation else old_id
 
   def __str__(self):
     """
@@ -428,7 +422,7 @@ class _IDs(object):
 
     rv += "Reverse translation:\n"
     for k in sorted(self._reverse_translation):
-      rv += "  " + str(k) + " -> " + str(self._reverse_translation[k]) + "\n"
+      rv += f"  {str(k)} -> {str(self._reverse_translation[k])}" + "\n"
 
     return rv
 
@@ -729,9 +723,7 @@ class Commit(_GitElementWithId):
     """
     Return first parent commit
     """
-    if self.parents:
-      return self.parents[0]
-    return None
+    return self.parents[0] if self.parents else None
 
   def skip(self, new_id=None):
     _SKIPPED_COMMITS.add(self.old_id or self.id)
@@ -965,8 +957,7 @@ class FastExportParser(object):
     next line; return None otherwise
     """
     mark = None
-    matches = self._mark_re.match(self._currentline)
-    if matches:
+    if matches := self._mark_re.match(self._currentline):
       mark = int(matches.group(1))
       self._advance_currentline()
     return mark
@@ -980,19 +971,16 @@ class FastExportParser(object):
     """
     orig_baseref, baseref = None, None
     rule, altrule = self._parent_regexes[refname]
-    matches = rule.match(self._currentline)
-    if matches:
+    if matches := rule.match(self._currentline):
       orig_baseref = int(matches.group(1))
       # We translate the parent commit mark to what it needs to be in
       # our mark namespace
       baseref = _IDS.translate(orig_baseref)
       self._advance_currentline()
-    else:
-      matches = altrule.match(self._currentline)
-      if matches:
-        orig_baseref = matches.group(1)
-        baseref = orig_baseref
-        self._advance_currentline()
+    elif matches := altrule.match(self._currentline):
+      orig_baseref = matches.group(1)
+      baseref = orig_baseref
+      self._advance_currentline()
     return orig_baseref, baseref
 
   def _parse_optional_filechange(self):
@@ -1003,10 +991,10 @@ class FastExportParser(object):
     of file-changes that fast-export will provide).
     """
     filechange = None
-    changetype = self._currentline[0:1]
+    changetype = self._currentline[:1]
     if changetype == b'M':
       (changetype, mode, idnum, path) = self._currentline.split(None, 3)
-      if idnum[0:1] == b':':
+      if idnum[:1] == b':':
         idnum = idnum[1:]
       path = path.rstrip(b'\n')
       # We translate the idnum to our id system
@@ -1194,11 +1182,11 @@ class FastExportParser(object):
       (author_name, author_email, author_date) = self._parse_user(b'author')
 
     (committer_name, committer_email, committer_date) = \
-      self._parse_user(b'committer')
+          self._parse_user(b'committer')
 
     if not author_name and not author_email:
       (author_name, author_email, author_date) = \
-        (committer_name, committer_email, committer_date)
+            (committer_name, committer_email, committer_date)
 
     encoding = None
     if self._currentline.startswith(b'encoding '):
@@ -1235,7 +1223,7 @@ class FastExportParser(object):
     file_change = self._parse_optional_filechange()
     had_file_changes = file_change is not None
     while file_change:
-      if not (type(file_change) == bytes and file_change == b'skipped'):
+      if type(file_change) != bytes or file_change != b'skipped':
         file_changes.append(file_change)
       file_change = self._parse_optional_filechange()
     if self._currentline == b'\n':
@@ -1261,7 +1249,7 @@ class FastExportParser(object):
 
     # Now print the resulting commit, or if prunable skip it
     self._latest_orig_commit[branch] = commit.id
-    if not (commit.old_id or commit.id) in _SKIPPED_COMMITS:
+    if ((commit.old_id or commit.id)) not in _SKIPPED_COMMITS:
       self._latest_commit[branch] = commit.id
     if not commit.dumped:
       self._imported_refs.add(commit.branch)
@@ -1454,9 +1442,8 @@ class SubprocessWrapper(object):
   def decodify(args):
     if type(args) == str:
       return args
-    else:
-      assert type(args) == list
-      return [decode(x) if type(x)==bytes else x for x in args]
+    assert type(args) == list
+    return [decode(x) if type(x)==bytes else x for x in args]
 
   @staticmethod
   def call(*args, **kwargs):
@@ -1538,7 +1525,7 @@ class GitUtils(object):
       # If error code is 1, there just aren't any refs; i.e. new repo.
       # If error code is other than 1, some other error (e.g. not a git repo)
       if e.returncode != 1:
-        raise SystemExit('fatal: {}'.format(e))
+        raise SystemExit(f'fatal: {e}')
       output = ''
     return dict(reversed(x.split()) for x in output.splitlines())
 
@@ -1550,7 +1537,7 @@ class GitUtils(object):
 
     # Get sizes of blobs by sha1
     cmd = '--batch-check=%(objectname) %(objecttype) ' + \
-          '%(objectsize) %(objectsize:disk)'
+              '%(objectsize) %(objectsize:disk)'
     cf = subproc.Popen(['git', 'cat-file', '--batch-all-objects', cmd],
                        bufsize = -1,
                        stdout = subprocess.PIPE)
@@ -1591,7 +1578,7 @@ class GitUtils(object):
         identifier = HASH_TO_ID.get(newhash, newhash)
         file_changes.append(FileChange(b'M', path, identifier, mode))
       else: # pragma: no cover
-        raise SystemExit("Unknown change type for line {}".format(line))
+        raise SystemExit(f"Unknown change type for line {line}")
 
     return file_changes
 
@@ -1608,7 +1595,7 @@ class GitUtils(object):
 
     cmd = 'git hash-object --stdin'.split()
     version = subproc.check_output(cmd, input=contents).strip()
-    print(decode(version[0:12]))
+    print(decode(version[:12]))
 
 class FilteringOptions(object):
   default_replace_text = b'***REMOVED***'
@@ -1623,8 +1610,8 @@ class FilteringOptions(object):
         if len(values) != 2:
           raise SystemExit(_("Error: --path-rename expects one colon in its"
                              " argument: <old_name:new_name>."))
-        if values[0] and values[1] and not (
-           values[0].endswith(b'/') == values[1].endswith(b'/')):
+        if (values[0] and values[1]
+            and values[0].endswith(b'/') != values[1].endswith(b'/')):
           raise SystemExit(_("Error: With --path-rename, if OLD_NAME and "
                              "NEW_NAME are both non-empty and either ends "
                              "with a slash then both must."))
@@ -1645,10 +1632,10 @@ class FilteringOptions(object):
         values = re.compile(values)
       items = getattr(namespace, self.dest, []) or []
       items.append((mod_type, match_type, values))
-      if (match_type, mod_type) == ('glob', 'filter'):
-        if not values.endswith(b'*'):
-          extension = b'*' if values.endswith(b'/') else b'/*'
-          items.append((mod_type, match_type, values+extension))
+      if (match_type, mod_type) == ('glob',
+                                    'filter') and not values.endswith(b'*'):
+        extension = b'*' if values.endswith(b'/') else b'/*'
+        items.append((mod_type, match_type, values+extension))
       setattr(namespace, self.dest, items)
 
   class HelperFilter(argparse.Action):
@@ -1831,13 +1818,13 @@ EXAMPLES
 
     contents = parser.add_argument_group(title=_("Content editing filters "
                                                  "(see also --blob-callback)"))
-    contents.add_argument('--replace-text', metavar='EXPRESSIONS_FILE',
-        help=_("A file with expressions that, if found, will be replaced. "
-               "By default, each expression is treated as literal text, "
-               "but 'regex:' and 'glob:' prefixes are supported.  You can "
-               "end the line with '==>' and some replacement text to "
-               "choose a replacement choice other than the default of '{}'."
-               .format(decode(FilteringOptions.default_replace_text))))
+    contents.add_argument(
+        '--replace-text',
+        metavar='EXPRESSIONS_FILE',
+        help=
+        _(f"A file with expressions that, if found, will be replaced. By default, each expression is treated as literal text, but 'regex:' and 'glob:' prefixes are supported.  You can end the line with '==>' and some replacement text to choose a replacement choice other than the default of '{decode(FilteringOptions.default_replace_text)}'."
+          ),
+    )
     contents.add_argument('--strip-blobs-bigger-than', metavar='SIZE',
                           dest='max_blob_size', default=0,
         help=_("Strip blobs (files) bigger than specified size (e.g. '5M', "
@@ -2045,20 +2032,19 @@ EXAMPLES
       raise SystemExit(_("Error: --analyze is incompatible with --stdin."))
     # If no path_changes are found, initialize with empty list but mark as
     # not inclusive so that all files match
-    if args.path_changes == None:
+    if args.path_changes is None:
       args.path_changes = []
       args.inclusive = False
     else:
       # Similarly, if we have no filtering paths, then no path should be
       # filtered out.  Based on how newname() works, the easiest way to
       # achieve that is setting args.inclusive to False.
-      if not any(x[0] == 'filter' for x in args.path_changes):
+      if all(x[0] != 'filter' for x in args.path_changes):
         args.inclusive = False
       # Also check for incompatible --use-base-name and --path-rename flags.
-      if args.use_base_name:
-        if any(x[0] == 'rename' for x in args.path_changes):
-          raise SystemExit(_("Error: --use-base-name and --path-rename are "
-                             "incompatible."))
+      if args.use_base_name and any(x[0] == 'rename' for x in args.path_changes):
+        raise SystemExit(_("Error: --use-base-name and --path-rename are "
+                           "incompatible."))
     # Also throw some sanity checks on git version here;
     # PERF: remove these checks once new enough git versions are common
     p = subproc.Popen('git fast-export -h'.split(),
@@ -2099,7 +2085,7 @@ EXAMPLES
           raise SystemExit(_("Error: could not parse --strip-blobs-bigger-than"
                              " argument %s")
                            % args.max_blob_size)
-        args.max_blob_size = int(args.max_blob_size[0:-1]) * mult[suffix]
+        args.max_blob_size = int(args.max_blob_size[:-1]) * mult[suffix]
       else:
         args.max_blob_size = int(args.max_blob_size)
 
@@ -2163,15 +2149,12 @@ EXAMPLES
           if repl:
             raise SystemExit(_("Error: In %s, 'glob:' and '==>' are incompatible (renaming globs makes no sense)" % decode(filename)))
         else:
-          if line.startswith(b'literal:'):
-            match = line[8:]
-          else:
-            match = line
-          if repl is not None:
-            if match and repl and match.endswith(b'/') != repl.endswith(b'/'):
-              raise SystemExit(_("Error: When rename directories, if OLDNAME "
-                                 "and NEW_NAME are both non-empty and either "
-                                 "ends with a slash then both must."))
+          match = line[8:] if line.startswith(b'literal:') else line
+          if (repl is not None and match and repl
+              and match.endswith(b'/') != repl.endswith(b'/')):
+            raise SystemExit(_("Error: When rename directories, if OLDNAME "
+                               "and NEW_NAME are both non-empty and either "
+                               "ends with a slash then both must."))
 
         # Record the filter or rename
         if repl is not None:
@@ -2305,7 +2288,7 @@ class RepoAnalyze(object):
       elif modes[-1] == b'000000':
         # Track when files/directories are deleted
         for f in RepoAnalyze.equiv_class(stats, filenames[-1]):
-          if any(x == b'040000' for x in modes[0:-1]):
+          if any(x == b'040000' for x in modes[:-1]):
             stats['tree_deletions'][f] = date
           else:
             stats['file_deletions'][f] = date
@@ -2339,9 +2322,7 @@ class RepoAnalyze(object):
     processed_commits_msg = _("Processed %d commits")
     commit_parse_progress = ProgressWriter()
     num_commits = 0
-    cmd = ('git rev-list --topo-order --reverse {}'.format(' '.join(args.refs)) +
-           ' | git diff-tree --stdin --always --root --format=%H%n%P%n%cd' +
-           ' --date=short -M -t -c --raw --combined-all-paths')
+    cmd = f"git rev-list --topo-order --reverse {' '.join(args.refs)} | git diff-tree --stdin --always --root --format=%H%n%P%n%cd --date=short -M -t -c --raw --combined-all-paths"
     dtp = subproc.Popen(cmd, shell=True, bufsize=-1, stdout=subprocess.PIPE)
     f = dtp.stdout
     line = f.readline()
@@ -2376,9 +2357,9 @@ class RepoAnalyze(object):
           assert line.startswith(b':'*(n-1))
           relevant = line[n-1:-1]
           splits = relevant.split(None, n)
-          modes = splits[0:n]
+          modes = splits[:n]
           splits = splits[n].split(None, n)
-          shas = splits[0:n]
+          shas = splits[:n]
           splits = splits[n].split(b'\t')
           change_types = splits[0]
           filenames = [PathQuoting.dequote(x) for x in splits[1:]]
@@ -2387,8 +2368,7 @@ class RepoAnalyze(object):
       # If someone is trying to analyze a subset of the history, make sure
       # to avoid dying on commits with parents that we haven't seen before
       if args.refs:
-        graph.record_external_commits([p for p in parents
-                                       if not p in graph.value])
+        graph.record_external_commits([p for p in parents if p not in graph.value])
 
       # Analyze this commit and update progress
       RepoAnalyze.analyze_commit(stats, graph, commit, parents, date,
@@ -2410,7 +2390,7 @@ class RepoAnalyze(object):
   @staticmethod
   def write_report(reportdir, stats):
     def datestr(datetimestr):
-      return datetimestr if datetimestr else _('<present>').encode()
+      return datetimestr or _('<present>').encode()
 
     def dirnames(path):
       while True:
@@ -2840,9 +2820,10 @@ class RepoFilter(object):
       exec('def callback({}, _do_not_use_this_var = None):\n'.format(argname)+
            '  '+'\n  '.join(str.splitlines()), globals())
       return callback #namespace['callback']
+
     def handle(type):
       callback_field = '_{}_callback'.format(type)
-      code_string = getattr(self._args, type+'_callback')
+      code_string = getattr(self._args, f'{type}_callback')
       if code_string:
         if os.path.exists(code_string):
           with open(code_string, 'r', encoding='utf-8') as f:
@@ -2852,10 +2833,11 @@ class RepoFilter(object):
                              "AND pass --%s-callback"
                            % (type, type)))
         if 'return ' not in code_string and \
-           type not in ('blob', 'commit', 'tag', 'reset'):
+             type not in ('blob', 'commit', 'tag', 'reset'):
           raise SystemExit(_("Error: --%s-callback should have a return statement")
                            % type)
         setattr(self, callback_field, make_callback(type, code_string))
+
     handle('filename')
     handle('message')
     handle('name')
@@ -2876,7 +2858,7 @@ class RepoFilter(object):
       return
 
     if self._args.debug:
-      print("[DEBUG] Passed arguments:\n{}".format(self._args))
+      print(f"[DEBUG] Passed arguments:\n{self._args}")
 
     # Determine basic repository information
     target_working_dir = self._args.target or b'.'
@@ -2927,14 +2909,14 @@ class RepoFilter(object):
     num_packs = int(stats[b'packs'])
     num_loose_objects = int(stats[b'count'])
     if num_packs > 1 or \
-       (num_packs == 1 and num_loose_objects > 0) or \
-       num_loose_objects >= 100:
+         (num_packs == 1 and num_loose_objects > 0) or \
+         num_loose_objects >= 100:
       abort(_("expected freshly packed repo"))
 
     # Make sure there is precisely one remote, named "origin"...or that this
     # is a new bare repo with no packs and no remotes
     output = subproc.check_output('git remote'.split()).strip()
-    if not (output == b"origin" or (num_packs == 0 and not output)):
+    if output != b"origin" and (num_packs != 0 or output):
       abort(_("expected one remote, origin"))
 
     # Avoid letting people running with weird setups and overwriting GIT_DIR
@@ -3000,20 +2982,20 @@ class RepoFilter(object):
     quiet_flags = '--quiet' if run_quietly else ''
     cleanup_cmds = []
     if repack:
-      cleanup_cmds = ['git reflog expire --expire=now --all'.split(),
-                      'git gc {} --prune=now'.format(quiet_flags).split()]
+      cleanup_cmds = [
+          'git reflog expire --expire=now --all'.split(),
+          f'git gc {quiet_flags} --prune=now'.split(),
+      ]
     if reset:
-      cleanup_cmds.insert(0, 'git reset {} --hard'.format(quiet_flags).split())
-    location_info = ' (in {})'.format(decode(repo)) if repo != b'.' else ''
+      cleanup_cmds.insert(0, f'git reset {quiet_flags} --hard'.split())
+    location_info = f' (in {decode(repo)})' if repo != b'.' else ''
     for cmd in cleanup_cmds:
       if show_debuginfo:
-        print("[DEBUG] Running{}: {}".format(location_info, ' '.join(cmd)))
+        print(f"[DEBUG] Running{location_info}: {' '.join(cmd)}")
       subproc.call(cmd, cwd=repo)
 
   def _get_rename(self, old_hash):
-    # If we already know the rename, just return it
-    new_hash = self._commit_renames.get(old_hash, None)
-    if new_hash:
+    if new_hash := self._commit_renames.get(old_hash, None):
       return new_hash
 
     # If it's not in the remaining pending renames, we don't know it
@@ -3051,12 +3033,11 @@ class RepoFilter(object):
     orig_len = len(old_hash)
     new_hash = self._get_rename(old_hash)
     if new_hash is None:
-      if old_hash[0:7] not in self._commit_short_old_hashes:
+      if old_hash[:7] not in self._commit_short_old_hashes:
         self._commits_referenced_but_removed.add(old_hash)
         return old_hash
-      possibilities = self._commit_short_old_hashes[old_hash[0:7]]
-      matches = [x for x in possibilities
-                 if x[0:orig_len] == old_hash]
+      possibilities = self._commit_short_old_hashes[old_hash[:7]]
+      matches = [x for x in possibilities if x[:orig_len] == old_hash]
       if len(matches) != 1:
         self._commits_referenced_but_removed.add(old_hash)
         return old_hash
@@ -3064,7 +3045,7 @@ class RepoFilter(object):
       new_hash = self._get_rename(old_hash)
 
     assert new_hash is not None
-    return new_hash[0:orig_len]
+    return new_hash[:orig_len]
 
   def _trim_extra_parents(self, orig_parents, parents):
     '''Due to pruning of empty commits, some parents could be non-existent
@@ -3113,7 +3094,7 @@ class RepoFilter(object):
     # they have not been seen or they are ones that have not been rewritten.
     parents_copy = parents
     uniq = [[p, orig_parents[i], is_rewritten[i]] for i, p in enumerate(parents)
-            if not (p in seen or seen_add(p)) or not is_rewritten[i]]
+            if p not in seen and not seen_add(p) or not is_rewritten[i]]
     parents, orig_parents, is_rewritten = [list(x) for x in zip(*uniq)]
     if len(parents) < 2:
       return parents_copy, parents[0]
@@ -3136,7 +3117,7 @@ class RepoFilter(object):
         # seems redundant.  However, if it was intentionally redundant
         # (e.g. a no-ff merge) in the original, then we want to keep it.
         if not always_prune and \
-           self._orig_graph.is_ancestor(orig_parents[cur],
+             self._orig_graph.is_ancestor(orig_parents[cur],
                                         orig_parents[other]):
           continue
         # Some folks want their history to have all first parents be merge
@@ -3152,24 +3133,21 @@ class RepoFilter(object):
         break # cur removed, so skip rest of others -- i.e. check cur+=1
     for x in reversed(to_remove):
       parents.pop(x)
-    if len(parents) < 2:
-      return parents_copy, parents[0]
-
-    return parents, None
+    return (parents_copy, parents[0]) if len(parents) < 2 else (parents, None)
 
   def _prunable(self, commit, new_1st_parent, had_file_changes, orig_parents):
     parents = commit.parents
 
     if self._args.prune_empty == 'never':
       return False
-    always_prune = (self._args.prune_empty == 'always')
-
     # For merge commits, unless there are prunable (redundant) parents, we
     # do not want to prune
     if len(parents) >= 2 and not new_1st_parent:
       return False
 
     if len(parents) < 2:
+      always_prune = (self._args.prune_empty == 'always')
+
       # Special logic for commits that started empty...
       if not had_file_changes and not always_prune:
         had_parents_pruned = (len(parents) < len(orig_parents) or
@@ -3202,7 +3180,7 @@ class RepoFilter(object):
       # non-merge commits can only be empty if blob/file-change editing caused
       # all file changes in the commit to have the same file contents as
       # the parent.
-      changed_files = set(change.filename for change in commit.file_changes)
+      changed_files = {change.filename for change in commit.file_changes}
       if len(orig_parents) < 2 and changed_files - self._files_tweaked:
         return False
 
@@ -3253,14 +3231,13 @@ class RepoFilter(object):
     return True
 
   def _record_remapping(self, commit, orig_parents):
-    new_id = None
     # Record the mapping of old commit hash to new one
     if commit.original_id and self._import_pipes:
       fi_input, fi_output = self._import_pipes
       self._output.write(b"get-mark :%d\n" % commit.id)
       self._output.flush()
       orig_id = commit.original_id
-      self._commit_short_old_hashes[orig_id[0:7]].add(orig_id)
+      self._commit_short_old_hashes[orig_id[:7]].add(orig_id)
       # Note that we have queued up an id for later reading; flush a
       # few of the older ones if we have too many queued up
       self._pending_renames[orig_id] = None
@@ -3268,6 +3245,7 @@ class RepoFilter(object):
     # Also, record if this was a merge commit that turned into a non-merge
     # commit.
     if len(orig_parents) >= 2 and len(commit.parents) < 2:
+      new_id = None
       self._commits_no_longer_merges.append((commit.original_id, new_id))
 
   def callback_metadata(self, extra_items = dict()):
@@ -3283,10 +3261,7 @@ class RepoFilter(object):
     if blob.original_id in self._args.strip_blobs_with_ids:
       blob.skip()
 
-    if ( self._args.replace_text
-        # not (if blob contains zero byte in the first 8Kb, that is, if blob is binary data)
-        and not b"\0" in blob.data[0:8192]
-    ):
+    if self._args.replace_text and b"\0" not in blob.data[:8192]:
       for literal, replacement in self._args.replace_text['literals']:
         blob.data = blob.data.replace(literal, replacement)
       for regex,   replacement in self._args.replace_text['regexes']:
@@ -3303,12 +3278,9 @@ class RepoFilter(object):
       if path_expression == b'':
         return True
       n = len(path_expression)
-      if (pathname.startswith(path_expression) and
-          (path_expression[n-1:n] == b'/' or
-           len(pathname) == n or
-           pathname[n:n+1] == b'/')):
-        return True
-      return False
+      return bool((pathname.startswith(path_expression)
+                   and (path_expression[n - 1:n] == b'/' or len(pathname) == n
+                        or pathname[n:n + 1] == b'/')))
 
     def newname(path_changes, pathname, use_base_name, filtering_is_inclusive):
       ''' Applies filtering and rename changes from path_changes to pathname,
@@ -3390,10 +3362,10 @@ class RepoFilter(object):
                            _("  Filename: {}").format(change.filename))
       # Strip files that are too large
       if self._args.max_blob_size and \
-         self._unpacked_size.get(change.blob_id, 0) > self._args.max_blob_size:
+           self._unpacked_size.get(change.blob_id, 0) > self._args.max_blob_size:
         continue
       if self._args.strip_blobs_with_ids and \
-         change.blob_id in self._args.strip_blobs_with_ids:
+           change.blob_id in self._args.strip_blobs_with_ids:
         continue
       # Otherwise, record the change
       new_file_changes[change.filename] = change

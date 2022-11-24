@@ -29,11 +29,11 @@ class InterleaveRepositories:
 
   def hold_commit(self, commit, metadata):
     commit.skip(new_id = commit.id)
-    letter = re.match(b'Commit (.)', commit.message).group(1)
+    letter = re.match(b'Commit (.)', commit.message)[1]
     self.commit_map[letter] = commit
 
   def weave_commit(self, commit, metadata):
-    letter = re.match(b'Commit (.)', commit.message).group(1)
+    letter = re.match(b'Commit (.)', commit.message)[1]
     prev_letter = bytes([ord(letter)-1])
 
     # Splice in any extra commits needed
